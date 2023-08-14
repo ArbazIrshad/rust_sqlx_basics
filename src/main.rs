@@ -1,5 +1,6 @@
+// use alloc::task;
 use sqlx::{Sqlite, SqlitePool};
-use std::{io, num::ParseIntError, str::FromStr, string::ParseError};
+use std::{error::Error, io, num::ParseIntError, str::FromStr, string::ParseError};
 use tokio;
 
 const DATABASE_URL: &str = "sqlite:todos.db";
@@ -32,7 +33,7 @@ impl FromStr for TaskOption {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn Error>> {
     // println!("Hello, world!");
     let pool = SqlitePool::connect(DATABASE_URL).await.unwrap();
     // SqlitePool::dat
@@ -54,16 +55,22 @@ async fn main() {
 
                 match input_value {
                     TaskOption::Create => {
-
                         create_task(&pool, "THis is a body not a description".to_string()).await;
-                    } 
-                    TaskOption::Read => todo!(),
+                    }
+                    TaskOption::Read => {
+                        let all_tasks =  get_tasks(&pool).await?;
+
+                        for task in all_tasks {
+                            println!("Task {:?}", task);
+                        }
+                    }
                     TaskOption::Update => todo!(),
                     TaskOption::Delete => todo!(),
                 }
             }
             Err(_) => println!("Something went wrong"),
         }
+        user_input.clear();
     }
 }
 
@@ -83,4 +90,30 @@ async fn create_task(pool: &SqlitePool, description: String) -> Result<i64, sqlx
     .last_insert_rowid();
 
     Ok(id)
+}
+
+async fn get_tasks(pool: &SqlitePool) -> Result<Vec<Task>, Box<dyn Error>> {
+    // let mut conn = pool.acquire().await?;
+
+    let recs = sqlx::query!("SELECT * FROM tasks").fetch_all(pool).await?;
+
+    let tasks = recs
+        .iter()
+        .map(|row| Task {
+            id: row.id,
+            title: row.title.to_string(),
+            description: row.body.to_string(),
+            done: row.done,
+        })
+        .collect();
+
+    Ok(tasks)
+}
+
+#[derive(Debug)]
+struct Task {
+    id: i64,
+    title: String,
+    description: String,
+    done: bool,
 }
